@@ -1,0 +1,23 @@
+# ---------------------------------------------------------------------------
+# Credentials -- NEVER commit these.
+# ---------------------------------------------------------------------------
+# config.h holds the real WiFi password. `config/config.h` is the canonical
+# copy you edit; the others are generated into each sketch folder by
+# tools/sync_shared.sh and are pure build artifacts. Ignore every one of them,
+# and keep only the placeholder template in git.
+config.h
+!config/config.example.h
+
+# ---------------------------------------------------------------------------
+# Build output
+# ---------------------------------------------------------------------------
+build/
+*.bin
+*.elf
+*.map
+
+# ---------------------------------------------------------------------------
+# OS / editor noise
+# ---------------------------------------------------------------------------
+.DS_Store
+*.swp
