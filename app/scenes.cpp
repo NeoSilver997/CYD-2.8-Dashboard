@@ -539,7 +539,7 @@ static void sunMoonTick() {
 
 static uint32_t busShownAt = 0;
 static int      busPage    = 0;
-static int      busPageCount = 1;
+static int      busPageCount = 4;
 static uint32_t busPageEnterMs = 0;
 
 static void busEtaEnter() {
@@ -560,8 +560,14 @@ static void busEtaEnter() {
   busPageEnterMs = millis();
 
   AppData::BusStop& stop = g_data.busStops[busPage];
-  int end = stop.routeCount;
-  if (end > 10) end = 10;
+
+  static int etaIdx[AppData::BUS_MAX];
+  int etaCount = 0;
+  for (int i = 0; i < stop.routeCount && etaCount < AppData::BUS_MAX; i++) {
+    if (stop.routes[i].eta1[0] != '\0') {
+      etaIdx[etaCount++] = i;
+    }
+  }
 
   tft.setTextColor(COL_ACCENT, COL_BG);
   tft.setTextDatum(MC_DATUM);
@@ -574,28 +580,33 @@ static void busEtaEnter() {
   tft.setTextFont(2);
   tft.drawString(pg, SCREEN_W - 4, 6);
 
+  if (etaCount == 0) {
+    tft.setTextColor(COL_DIM, COL_BG);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextFont(2);
+    tft.drawString("no upcoming buses", SCREEN_W / 2, CONTENT_H / 2);
+    busShownAt = g_data.busUpdatedAt;
+    return;
+  }
+
   tft.setTextFont(2);
   int y = 26;
   const int rowH = 14;
 
-  for (int i = 0; i < end && y < STATUS_Y - 4; i++) {
-    AppData::BusRoute& r = stop.routes[i];
-    bool hasEta = (r.eta1[0] != '\0');
+  for (int i = 0; i < etaCount && y < STATUS_Y - 4; i++) {
+    AppData::BusRoute& r = stop.routes[etaIdx[i]];
 
-    uint16_t col = hasEta ? COL_TEXT : COL_DIM;
-    tft.setTextColor(col, COL_BG);
+    tft.setTextColor(COL_TEXT, COL_BG);
     tft.setTextDatum(ML_DATUM);
 
     String routeDest = String(r.route) + " " + String(r.dest);
     tft.drawString(routeDest, 4, y);
 
-    if (hasEta) {
-      tft.setTextColor(COL_ACCENT, COL_BG);
-      tft.setTextDatum(MR_DATUM);
-      String etas = String(r.eta1);
-      if (r.eta2[0] != '\0') etas += "  " + String(r.eta2);
-      tft.drawString(etas, SCREEN_W - 4, y);
-    }
+    tft.setTextColor(COL_ACCENT, COL_BG);
+    tft.setTextDatum(MR_DATUM);
+    String etas = String(r.eta1);
+    if (r.eta2[0] != '\0') etas += "  " + String(r.eta2);
+    tft.drawString(etas, SCREEN_W - 4, y);
 
     y += rowH;
   }
@@ -605,7 +616,7 @@ static void busEtaEnter() {
 
 static void busEtaTick() {
   if (g_data.busUpdatedAt != busShownAt) busEtaEnter();
-  if (busPageCount > 1 && (millis() - busPageEnterMs >= 5000)) {
+  if (busPageCount > 1 && (millis() - busPageEnterMs >= 4000)) {
     busPage = (busPage + 1) % busPageCount;
     busEtaEnter();
   }

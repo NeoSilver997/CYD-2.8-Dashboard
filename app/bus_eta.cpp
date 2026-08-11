@@ -19,23 +19,18 @@ static uint32_t backoffMin    = 0;
 
 static int etaMinutes(const char* iso) {
   if (!iso || strlen(iso) < 16) return -1;
-  int yr = (iso[0]-'0')*1000 + (iso[1]-'0')*100 + (iso[2]-'0')*10 + (iso[3]-'0');
-  int mo = (iso[5]-'0')*10 + (iso[6]-'0');
-  int dy = (iso[8]-'0')*10 + (iso[9]-'0');
   int hh = (iso[11]-'0')*10 + (iso[12]-'0');
   int mm = (iso[14]-'0')*10 + (iso[15]-'0');
-  struct tm t = {0};
-  t.tm_year = yr - 1900;
-  t.tm_mon  = mo - 1;
-  t.tm_mday = dy;
-  t.tm_hour = hh;
-  t.tm_min  = mm;
-  t.tm_sec  = 0;
-  time_t eta = mktime(&t);
-  if (eta < 0) return -1;
-  int diff = (int)(eta - time(nullptr));
-  if (diff < 0) diff = 0;
-  return (diff + 59) / 60;
+
+  time_t now = time(nullptr);
+  struct tm* t = localtime(&now);
+
+  int nowMin = t->tm_hour * 60 + t->tm_min;
+  int etaMin = hh * 60 + mm;
+
+  int diff = etaMin - nowMin;
+  if (diff < 0) diff += 24 * 60;
+  return diff;
 }
 
 static void seedDummy() {
