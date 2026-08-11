@@ -534,30 +534,18 @@ static void sunMoonTick() {
 // ===========================================================================
 // Scene 5 -- Bus ETA (plan §7)
 // ===========================================================================
-// Routes with ETAs only, paginated 10 per page, auto-advance every 5 s.
-// Each row: "route dest" on the left, up to two ETAs right-aligned.
+// One stop per page, 10 routes max, auto-advance every 5 s. Each row: route,
+// destination, up to two ETAs in minutes right-aligned.
 
 static uint32_t busShownAt = 0;
 static int      busPage    = 0;
 static int      busPageCount = 1;
 static uint32_t busPageEnterMs = 0;
-static int      busEtaCount = 0;
-
-static void busCompact() {
-  int w = 0;
-  for (int i = 0; i < g_data.busCount; i++) {
-    if (g_data.busRoutes[i].eta1[0] != '\0') {
-      if (w != i) g_data.busRoutes[w] = g_data.busRoutes[i];
-      w++;
-    }
-  }
-  busEtaCount = w;
-}
 
 static void busEtaEnter() {
   tft.fillRect(0, 0, SCREEN_W, CONTENT_H, COL_BG);
 
-  if (!g_data.busValid) {
+  if (!g_data.busValid || g_data.busStopCount == 0) {
     tft.setTextColor(COL_DIM, COL_BG);
     tft.setTextDatum(MC_DATUM);
     tft.setTextFont(4);
@@ -567,19 +555,18 @@ static void busEtaEnter() {
     return;
   }
 
-  busCompact();
-  busPageCount = (busEtaCount + 9) / 10;
+  busPageCount = g_data.busStopCount;
   if (busPage >= busPageCount) busPage = 0;
   busPageEnterMs = millis();
 
-  int start = busPage * 10;
-  int end = start + 10;
-  if (end > busEtaCount) end = busEtaCount;
+  AppData::BusStop& stop = g_data.busStops[busPage];
+  int end = stop.routeCount;
+  if (end > 10) end = 10;
 
   tft.setTextColor(COL_ACCENT, COL_BG);
   tft.setTextDatum(MC_DATUM);
   tft.setTextFont(4);
-  tft.drawString("BUS ETA", SCREEN_W / 2, 10);
+  tft.drawString(stop.name, SCREEN_W / 2, 10);
 
   char pg[8];
   snprintf(pg, sizeof(pg), "%d/%d", busPage + 1, busPageCount);
@@ -591,20 +578,24 @@ static void busEtaEnter() {
   int y = 26;
   const int rowH = 14;
 
-  for (int i = start; i < end && y < STATUS_Y - 4; i++) {
-    AppData::BusRoute& r = g_data.busRoutes[i];
+  for (int i = 0; i < end && y < STATUS_Y - 4; i++) {
+    AppData::BusRoute& r = stop.routes[i];
+    bool hasEta = (r.eta1[0] != '\0');
 
-    tft.setTextColor(COL_TEXT, COL_BG);
+    uint16_t col = hasEta ? COL_TEXT : COL_DIM;
+    tft.setTextColor(col, COL_BG);
     tft.setTextDatum(ML_DATUM);
 
     String routeDest = String(r.route) + " " + String(r.dest);
     tft.drawString(routeDest, 4, y);
 
-    tft.setTextColor(COL_ACCENT, COL_BG);
-    tft.setTextDatum(MR_DATUM);
-    String etas = String(r.eta1);
-    if (r.eta2[0] != '\0') etas += "  " + String(r.eta2);
-    tft.drawString(etas, SCREEN_W - 4, y);
+    if (hasEta) {
+      tft.setTextColor(COL_ACCENT, COL_BG);
+      tft.setTextDatum(MR_DATUM);
+      String etas = String(r.eta1);
+      if (r.eta2[0] != '\0') etas += "  " + String(r.eta2);
+      tft.drawString(etas, SCREEN_W - 4, y);
+    }
 
     y += rowH;
   }

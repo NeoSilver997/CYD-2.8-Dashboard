@@ -43,7 +43,8 @@ struct AppData {
   time_t   moonrise = 0, moonset = 0;
 
   // bus ETA
-  static const int BUS_MAX = 20;
+  static const int BUS_MAX = 40;
+  static const int BUS_STOP_MAX = 10;
   struct BusRoute {
     char route[8];
     char dest[28];
@@ -52,8 +53,14 @@ struct AppData {
     char remark1[16];
     char remark2[16];
   };
-  BusRoute busRoutes[BUS_MAX];
-  int      busCount = 0;
+  struct BusStop {
+    char stopId[20];
+    char name[32];
+    BusRoute routes[BUS_MAX];
+    int     routeCount = 0;
+  };
+  BusStop busStops[BUS_STOP_MAX];
+  int      busStopCount = 0;
   uint32_t busUpdatedAt = 0;
   bool     busValid = false;
 };

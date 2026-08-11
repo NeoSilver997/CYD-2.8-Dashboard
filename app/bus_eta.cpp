@@ -11,83 +11,78 @@ static const uint32_t INTERVAL_MS = 60UL * 1000;   // 1 min
 
 #define BUS_DUMMY 1
 
-static const char* BUS_STOP_1 = "4A84482F3A54E4CC";
-static const char* BUS_STOP_2 = "ABC15E2110BF7A49";
+static const char* BUS_STOP_IDS[] = { "4A84482F3A54E4CC", "ABC15E2110BF7A49" };
+static const int   BUS_STOP_N = 2;
 
 static uint32_t nextAttemptMs = 0;
 static uint32_t backoffMin    = 0;
 
+static int etaMinutes(const char* iso) {
+  if (!iso || strlen(iso) < 16) return -1;
+  int yr = (iso[0]-'0')*1000 + (iso[1]-'0')*100 + (iso[2]-'0')*10 + (iso[3]-'0');
+  int mo = (iso[5]-'0')*10 + (iso[6]-'0');
+  int dy = (iso[8]-'0')*10 + (iso[9]-'0');
+  int hh = (iso[11]-'0')*10 + (iso[12]-'0');
+  int mm = (iso[14]-'0')*10 + (iso[15]-'0');
+  struct tm t = {0};
+  t.tm_year = yr - 1900;
+  t.tm_mon  = mo - 1;
+  t.tm_mday = dy;
+  t.tm_hour = hh;
+  t.tm_min  = mm;
+  t.tm_sec  = 0;
+  time_t eta = mktime(&t);
+  if (eta < 0) return -1;
+  int diff = (int)(eta - time(nullptr));
+  if (diff < 0) diff = 0;
+  return (diff + 59) / 60;
+}
+
 static void seedDummy() {
-  g_data.busCount = 10;
-  strncpy(g_data.busRoutes[0].route, "290",  sizeof(g_data.busRoutes[0].route) - 1);
-  strncpy(g_data.busRoutes[0].dest,  "TSUEN WAN WEST STATION", sizeof(g_data.busRoutes[0].dest) - 1);
-  strncpy(g_data.busRoutes[0].eta1, "02:18", sizeof(g_data.busRoutes[0].eta1) - 1);
-  strncpy(g_data.busRoutes[0].eta2, "02:35", sizeof(g_data.busRoutes[0].eta2) - 1);
+  g_data.busStopCount = 2;
 
-  strncpy(g_data.busRoutes[1].route, "290X", sizeof(g_data.busRoutes[1].route) - 1);
-  strncpy(g_data.busRoutes[1].dest,  "TSUEN WAN WEST STATION", sizeof(g_data.busRoutes[1].dest) - 1);
-  strncpy(g_data.busRoutes[1].eta1, "02:22", sizeof(g_data.busRoutes[1].eta1) - 1);
+  strncpy(g_data.busStops[0].stopId, BUS_STOP_IDS[0], sizeof(g_data.busStops[0].stopId) - 1);
+  strncpy(g_data.busStops[0].name,  "HONG SING GARDEN (TK451)", sizeof(g_data.busStops[0].name) - 1);
+  g_data.busStops[0].routeCount = 5;
+  strncpy(g_data.busStops[0].routes[0].route, "290",   sizeof(g_data.busStops[0].routes[0].route) - 1);
+  strncpy(g_data.busStops[0].routes[0].dest,  "TSUEN WAN WEST STATION", sizeof(g_data.busStops[0].routes[0].dest) - 1);
+  snprintf(g_data.busStops[0].routes[0].eta1, sizeof(g_data.busStops[0].routes[0].eta1), "%d min", 3);
+  snprintf(g_data.busStops[0].routes[0].eta2, sizeof(g_data.busStops[0].routes[0].eta2), "%d min", 12);
+  strncpy(g_data.busStops[0].routes[1].route, "290X",  sizeof(g_data.busStops[0].routes[1].route) - 1);
+  strncpy(g_data.busStops[0].routes[1].dest,  "TSUEN WAN WEST STATION", sizeof(g_data.busStops[0].routes[1].dest) - 1);
+  snprintf(g_data.busStops[0].routes[1].eta1, sizeof(g_data.busStops[0].routes[1].eta1), "%d min", 7);
+  strncpy(g_data.busStops[0].routes[2].route, "93M",   sizeof(g_data.busStops[0].routes[2].route) - 1);
+  strncpy(g_data.busStops[0].routes[2].dest,  "PO LAM", sizeof(g_data.busStops[0].routes[2].dest) - 1);
+  snprintf(g_data.busStops[0].routes[2].eta1, sizeof(g_data.busStops[0].routes[2].eta1), "%d min", 2);
+  strncpy(g_data.busStops[0].routes[3].route, "95",    sizeof(g_data.busStops[0].routes[3].route) - 1);
+  strncpy(g_data.busStops[0].routes[3].dest,  "KOWLOON STATION", sizeof(g_data.busStops[0].routes[3].dest) - 1);
+  g_data.busStops[0].routes[3].eta1[0] = '\0';
+  strncpy(g_data.busStops[0].routes[4].route, "N691",  sizeof(g_data.busStops[0].routes[4].route) - 1);
+  strncpy(g_data.busStops[0].routes[4].dest,  "CENTRAL (MACAO FERRY)", sizeof(g_data.busStops[0].routes[4].dest) - 1);
+  g_data.busStops[0].routes[4].eta1[0] = '\0';
 
-  strncpy(g_data.busRoutes[2].route, "93M", sizeof(g_data.busRoutes[2].route) - 1);
-  strncpy(g_data.busRoutes[2].dest,  "PO LAM", sizeof(g_data.busRoutes[2].dest) - 1);
-  strncpy(g_data.busRoutes[2].eta1, "02:25", sizeof(g_data.busRoutes[2].eta1) - 1);
-
-  strncpy(g_data.busRoutes[3].route, "95", sizeof(g_data.busRoutes[3].route) - 1);
-  strncpy(g_data.busRoutes[3].dest,  "KOWLOON STATION", sizeof(g_data.busRoutes[3].dest) - 1);
-  strncpy(g_data.busRoutes[3].eta1, "02:30", sizeof(g_data.busRoutes[3].eta1) - 1);
-
-  strncpy(g_data.busRoutes[4].route, "N293", sizeof(g_data.busRoutes[4].route) - 1);
-  strncpy(g_data.busRoutes[4].dest,  "MONG KOK (PARK AVENUE)", sizeof(g_data.busRoutes[4].dest) - 1);
-  strncpy(g_data.busRoutes[4].eta1, "02:45", sizeof(g_data.busRoutes[4].eta1) - 1);
-
-  strncpy(g_data.busRoutes[5].route, "101", sizeof(g_data.busRoutes[5].route) - 1);
-  strncpy(g_data.busRoutes[5].dest,  "TAI HANG", sizeof(g_data.busRoutes[5].dest) - 1);
-  strncpy(g_data.busRoutes[5].eta1, "02:10", sizeof(g_data.busRoutes[5].eta1) - 1);
-
-  strncpy(g_data.busRoutes[6].route, "103", sizeof(g_data.busRoutes[6].route) - 1);
-  strncpy(g_data.busRoutes[6].dest,  "KWUN TONG", sizeof(g_data.busRoutes[6].dest) - 1);
-  g_data.busRoutes[6].eta1[0] = '\0';
-
-  strncpy(g_data.busRoutes[7].route, "290X", sizeof(g_data.busRoutes[7].route) - 1);
-  strncpy(g_data.busRoutes[7].dest,  "TSUEN WAN WEST STATION", sizeof(g_data.busRoutes[7].dest) - 1);
-  strncpy(g_data.busRoutes[7].eta1, "02:50", sizeof(g_data.busRoutes[7].eta1) - 1);
-
-  strncpy(g_data.busRoutes[8].route, "N691", sizeof(g_data.busRoutes[8].route) - 1);
-  strncpy(g_data.busRoutes[8].dest,  "CENTRAL (MACAO FERRY)", sizeof(g_data.busRoutes[8].dest) - 1);
-  strncpy(g_data.busRoutes[8].eta1, "03:02", sizeof(g_data.busRoutes[8].eta1) - 1);
-
-  strncpy(g_data.busRoutes[9].route, "988", sizeof(g_data.busRoutes[9].route) - 1);
-  strncpy(g_data.busRoutes[9].dest,  "TUNG CHUNG", sizeof(g_data.busRoutes[9].dest) - 1);
-  g_data.busRoutes[9].eta1[0] = '\0';
+  strncpy(g_data.busStops[1].stopId, BUS_STOP_IDS[1], sizeof(g_data.busStops[1].stopId) - 1);
+  strncpy(g_data.busStops[1].name,  "HONG SING GARDEN (TK200)", sizeof(g_data.busStops[1].name) - 1);
+  g_data.busStops[1].routeCount = 4;
+  strncpy(g_data.busStops[1].routes[0].route, "290A",  sizeof(g_data.busStops[1].routes[0].route) - 1);
+  strncpy(g_data.busStops[1].routes[0].dest,  "TSUEN WAN WEST STATION", sizeof(g_data.busStops[1].routes[0].dest) - 1);
+  snprintf(g_data.busStops[1].routes[0].eta1, sizeof(g_data.busStops[1].routes[0].eta1), "%d min", 5);
+  strncpy(g_data.busStops[1].routes[1].route, "290X",  sizeof(g_data.busStops[1].routes[1].route) - 1);
+  strncpy(g_data.busStops[1].routes[1].dest,  "TSUEN WAN WEST STATION", sizeof(g_data.busStops[1].routes[1].dest) - 1);
+  snprintf(g_data.busStops[1].routes[1].eta1, sizeof(g_data.busStops[1].routes[1].eta1), "%d min", 15);
+  strncpy(g_data.busStops[1].routes[2].route, "93K",   sizeof(g_data.busStops[1].routes[2].route) - 1);
+  strncpy(g_data.busStops[1].routes[2].dest,  "MONG KOK EAST STATION", sizeof(g_data.busStops[1].routes[2].dest) - 1);
+  g_data.busStops[1].routes[2].eta1[0] = '\0';
+  strncpy(g_data.busStops[1].routes[3].route, "N290",  sizeof(g_data.busStops[1].routes[3].route) - 1);
+  strncpy(g_data.busStops[1].routes[3].dest,  "TSUEN WAN WEST STATION", sizeof(g_data.busStops[1].routes[3].dest) - 1);
+  g_data.busStops[1].routes[3].eta1[0] = '\0';
 
   g_data.busUpdatedAt = (uint32_t)time(nullptr);
   g_data.busValid = true;
   Serial.println("bus: dummy data seeded");
 }
 
-static void busDedup() {
-  int w = 0;
-  for (int i = 0; i < g_data.busCount; i++) {
-    bool dup = false;
-    for (int j = 0; j < w; j++) {
-      if (strcmp(g_data.busRoutes[i].route, g_data.busRoutes[j].route) == 0 &&
-          strcmp(g_data.busRoutes[i].dest, g_data.busRoutes[j].dest) == 0) {
-        if (g_data.busRoutes[i].eta1[0] != '\0' && g_data.busRoutes[j].eta1[0] == '\0') {
-          g_data.busRoutes[j] = g_data.busRoutes[i];
-        }
-        dup = true;
-        break;
-      }
-    }
-    if (!dup) {
-      if (w != i) g_data.busRoutes[w] = g_data.busRoutes[i];
-      w++;
-    }
-  }
-  g_data.busCount = w;
-}
-
-static bool fetchOneStop(const char* stopId) {
+static bool fetchStop(const char* stopId, AppData::BusStop& stop) {
   String url = String("https://bus-eta-sage.vercel.app/api/stops/") + stopId + "/eta";
 
   WiFiClientSecure client;
@@ -124,14 +119,11 @@ static bool fetchOneStop(const char* stopId) {
     return false;
   }
 
-  int startCount = g_data.busCount;
+  stop.routeCount = 0;
   for (JsonObject item : arr) {
-    if (g_data.busCount >= AppData::BUS_MAX) {
-      Serial.println("bus: hit BUS_MAX");
-      break;
-    }
+    if (stop.routeCount >= AppData::BUS_MAX) break;
 
-    AppData::BusRoute& r = g_data.busRoutes[g_data.busCount];
+    AppData::BusRoute& r = stop.routes[stop.routeCount];
     const char* route = item["route"] | "";
     const char* dest = item["dest_en"] | item["dest_sc"] | "";
     strncpy(r.route, route, sizeof(r.route) - 1);
@@ -145,25 +137,23 @@ static bool fetchOneStop(const char* stopId) {
     JsonArray eta = item["eta"];
     if (!eta.isNull() && eta.size() > 0) {
       const char* e = eta[0]["eta"];
-      if (e && strlen(e) >= 16) {
-        snprintf(r.eta1, sizeof(r.eta1), "%c%c:%c%c", e[11], e[12], e[14], e[15]);
-      }
+      int m1 = etaMinutes(e);
+      if (m1 >= 0) snprintf(r.eta1, sizeof(r.eta1), "%d min", m1);
       const char* rm = eta[0]["remark_en"];
       if (rm && rm[0]) strncpy(r.remark1, rm, sizeof(r.remark1) - 1);
     }
     if (!eta.isNull() && eta.size() > 1) {
       const char* e = eta[1]["eta"];
-      if (e && strlen(e) >= 16) {
-        snprintf(r.eta2, sizeof(r.eta2), "%c%c:%c%c", e[11], e[12], e[14], e[15]);
-      }
+      int m2 = etaMinutes(e);
+      if (m2 >= 0) snprintf(r.eta2, sizeof(r.eta2), "%d min", m2);
       const char* rm = eta[1]["remark_en"];
       if (rm && rm[0]) strncpy(r.remark2, rm, sizeof(r.remark2) - 1);
     }
 
-    g_data.busCount++;
+    stop.routeCount++;
   }
 
-  Serial.printf("bus: stop %s added %d routes\n", stopId, g_data.busCount - startCount);
+  Serial.printf("bus: stop %s (%s) got %d routes\n", stopId, stop.name, stop.routeCount);
   return true;
 }
 
@@ -189,22 +179,30 @@ static bool doFetch() {
   }
   Serial.printf("ok -> %s\n", ip.toString().c_str());
 
-  g_data.busCount = 0;
+  g_data.busStopCount = 0;
+  bool anyOk = false;
 
-  bool ok1 = fetchOneStop(BUS_STOP_1);
-  bool ok2 = fetchOneStop(BUS_STOP_2);
-
-  if (!ok1 && !ok2) {
-    Serial.println("bus: both stops failed");
-    return false;
+  for (int i = 0; i < BUS_STOP_N; i++) {
+    if (g_data.busStopCount >= AppData::BUS_STOP_MAX) break;
+    AppData::BusStop& stop = g_data.busStops[g_data.busStopCount];
+    strncpy(stop.stopId, BUS_STOP_IDS[i], sizeof(stop.stopId) - 1);
+    stop.name[0] = '\0';
+    stop.routeCount = 0;
+    if (fetchStop(BUS_STOP_IDS[i], stop)) {
+      anyOk = true;
+      g_data.busStopCount++;
+    }
   }
 
-  busDedup();
+  if (!anyOk) {
+    Serial.println("bus: all stops failed");
+    return false;
+  }
 
   g_data.busUpdatedAt = (uint32_t)time(nullptr);
   g_data.busValid = true;
 
-  Serial.printf("bus: total %d unique routes after dedup  heap %u\n", g_data.busCount, ESP.getFreeHeap());
+  Serial.printf("bus: %d stops fetched  heap %u\n", g_data.busStopCount, ESP.getFreeHeap());
   return true;
 }
 
