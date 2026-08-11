@@ -532,6 +532,95 @@ static void sunMoonTick() {
 }
 
 // ===========================================================================
+// Scene 5 -- Bus ETA (plan §7)
+// ===========================================================================
+// Routes with ETAs only, paginated 10 per page, auto-advance every 5 s.
+// Each row: "route dest" on the left, up to two ETAs right-aligned.
+
+static uint32_t busShownAt = 0;
+static int      busPage    = 0;
+static int      busPageCount = 1;
+static uint32_t busPageEnterMs = 0;
+static int      busEtaCount = 0;
+
+static void busCompact() {
+  int w = 0;
+  for (int i = 0; i < g_data.busCount; i++) {
+    if (g_data.busRoutes[i].eta1[0] != '\0') {
+      if (w != i) g_data.busRoutes[w] = g_data.busRoutes[i];
+      w++;
+    }
+  }
+  busEtaCount = w;
+}
+
+static void busEtaEnter() {
+  tft.fillRect(0, 0, SCREEN_W, CONTENT_H, COL_BG);
+
+  if (!g_data.busValid) {
+    tft.setTextColor(COL_DIM, COL_BG);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextFont(4);
+    tft.drawString("fetching bus ETA...", SCREEN_W / 2, CONTENT_H / 2);
+    busShownAt = 0;
+    busPage = 0;
+    return;
+  }
+
+  busCompact();
+  busPageCount = (busEtaCount + 9) / 10;
+  if (busPage >= busPageCount) busPage = 0;
+  busPageEnterMs = millis();
+
+  int start = busPage * 10;
+  int end = start + 10;
+  if (end > busEtaCount) end = busEtaCount;
+
+  tft.setTextColor(COL_ACCENT, COL_BG);
+  tft.setTextDatum(MC_DATUM);
+  tft.setTextFont(4);
+  tft.drawString("BUS ETA", SCREEN_W / 2, 10);
+
+  char pg[8];
+  snprintf(pg, sizeof(pg), "%d/%d", busPage + 1, busPageCount);
+  tft.setTextDatum(TR_DATUM);
+  tft.setTextFont(2);
+  tft.drawString(pg, SCREEN_W - 4, 6);
+
+  tft.setTextFont(2);
+  int y = 26;
+  const int rowH = 14;
+
+  for (int i = start; i < end && y < STATUS_Y - 4; i++) {
+    AppData::BusRoute& r = g_data.busRoutes[i];
+
+    tft.setTextColor(COL_TEXT, COL_BG);
+    tft.setTextDatum(ML_DATUM);
+
+    String routeDest = String(r.route) + " " + String(r.dest);
+    tft.drawString(routeDest, 4, y);
+
+    tft.setTextColor(COL_ACCENT, COL_BG);
+    tft.setTextDatum(MR_DATUM);
+    String etas = String(r.eta1);
+    if (r.eta2[0] != '\0') etas += "  " + String(r.eta2);
+    tft.drawString(etas, SCREEN_W - 4, y);
+
+    y += rowH;
+  }
+
+  busShownAt = g_data.busUpdatedAt;
+}
+
+static void busEtaTick() {
+  if (g_data.busUpdatedAt != busShownAt) busEtaEnter();
+  if (busPageCount > 1 && (millis() - busPageEnterMs >= 5000)) {
+    busPage = (busPage + 1) % busPageCount;
+    busEtaEnter();
+  }
+}
+
+// ===========================================================================
 // Scene table + manager
 // ===========================================================================
 static Scene scenes[] = {
@@ -539,6 +628,7 @@ static Scene scenes[] = {
   { "Weather",     12000, weatherEnter, weatherTick, nullptr },
   { "Sun & Moon",  12000, sunMoonEnter, sunMoonTick, nullptr },
   { "Air Quality", 12000, airQualEnter, airQualTick, nullptr },
+  { "Bus ETA",     12000, busEtaEnter,  busEtaTick,  nullptr },
 };
 static const int SCENE_COUNT = sizeof(scenes) / sizeof(scenes[0]);
 

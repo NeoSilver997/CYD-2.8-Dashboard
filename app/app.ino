@@ -26,6 +26,7 @@
 #include "weather.h"
 #include "airquality.h"
 #include "sun_moon.h"
+#include "bus_eta.h"
 
 // The shared globals declared extern in the headers.
 TFT_eSPI tft = TFT_eSPI();
@@ -95,6 +96,7 @@ void setup() {
   sceneManager_begin();
   weather_begin();
   airquality_begin();
+  busEta_begin();
   Serial.println("running.  tap = next scene | hold = pin | hold 4 s = recalibrate");
 }
 
@@ -115,6 +117,7 @@ void loop() {
   sceneManager_tick();
   weather_tick();       // fetches when due (first fetch shortly after boot)
   airquality_tick();    // AQI fetch, staggered ~5 s after weather
+  busEta_tick();        // bus ETA fetch every 60 s
 
   // Refresh the status strip twice a second (cheap; only changed bits repaint),
   // but five times faster while a finger is down -- that is when the strip is

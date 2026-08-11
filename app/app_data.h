@@ -41,6 +41,21 @@ struct AppData {
   float    moonPhase = 0;              // 0.0-1.0
   float    moonIlluminationPct = 0;
   time_t   moonrise = 0, moonset = 0;
+
+  // bus ETA
+  static const int BUS_MAX = 20;
+  struct BusRoute {
+    char route[8];
+    char dest[28];
+    char eta1[8];
+    char eta2[8];
+    char remark1[16];
+    char remark2[16];
+  };
+  BusRoute busRoutes[BUS_MAX];
+  int      busCount = 0;
+  uint32_t busUpdatedAt = 0;
+  bool     busValid = false;
 };
 
 extern AppData g_data;
