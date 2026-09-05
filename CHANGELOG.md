@@ -2,6 +2,258 @@
 
 ## Unreleased
 
+## v2.2.1 — a display setting for the boards wired the other way — 2026-08-31
+
+Boards sold as ESP32-2432S028R do not all drive the panel with the same colour
+polarity. On one of the other ones every colour comes out as its exact
+complement — red as cyan, green as magenta, blue as yellow — and until now the
+only remedy was to edit `CYD_TFT_INVERT` in `config/board.h` and rebuild, which
+is not something you can ask of somebody who flashed a published `.bin`.
+
+It is a setting now, on the settings page and on the setup portal both.
+
+Flashing `cyd-clock-weather-v2.2.1-4mb.bin` at `0x0` is a **factory reset** — it
+erases stored settings and touch calibration along with everything else. To
+update an existing device and keep them, upload the application only with
+`./tools/flash.sh app`. See `flash.md`.
+
+### Added
+
+- **A display colour setting: Normal, or "My colours are inverted".** Boards
+  sold as ESP32-2432S028R do not all drive the panel with the same inversion
+  polarity — same chip, same silkscreen, same pin map, opposite controller. On
+  one of the other ones every colour came out as its exact complement
+  (red→cyan, green→magenta, blue→yellow), and the only remedy was to edit
+  `CYD_TFT_INVERT` in `config/board.h` and rebuild, which is not something you
+  can ask of somebody who flashed a published `.bin`.
+  - `CYD_TFT_INVERT` remains the default, so a board that was already correct is
+    unaffected and upgrading cannot turn a working panel inside out. A device
+    provisioned before this setting existed has no stored value, and the default
+    is what it gets.
+  - The toggle is in the **setup portal** as well as the settings page. It has
+    to be: someone holding the other panel has wrong colours on the first screen
+    they ever see, before the device has joined any network.
+  - The options name what the user is looking at rather than what the register
+    does. "Inversion on/off" is unanswerable for somebody who does not know how
+    their board is wired; "my colours are inverted" is not.
+
+### Changed
+
+- **`settings_begin()` now runs before `tft.init()`.** Colour inversion is a
+  setting, and it has to be known before the first pixel — including the pixels
+  of the touch calibration wizard, which on a new device runs before anything
+  else. Nothing in `settings_begin()` touches the display. A side effect is that
+  boot-time calibration is now drawn in the saved language rather than always in
+  English.
+- Restored the executable bit on `tools/build_all.sh`, `tools/flash.sh` and
+  `tools/sync_shared.sh`. All three are documented as `./tools/...` and none of
+  them would run from a fresh clone.
+
+### Upgrading
+
+Nothing to do, and nothing to decide. `CYD_TFT_INVERT` is still the default, a
+device provisioned before this release has no stored value to read, and the
+default is what it gets — so a panel that was correct on v2.2.0 is untouched.
+
+If yours is one of the boards that was never usable, this is the release that
+fixes it: settings page → **Display colours** → *My colours are inverted*.
+
+
+## v2.2.0 — English or 繁體中文, and text that stopped being jagged — 2026-08-24
+
+Adds a language setting that covers every surface the device has — all five
+screens, the status strip, the boot messages, the setup portal, the touch
+wizard and the settings page itself — and replaces the built-in bitmap fonts
+with antialiased ones everywhere Latin is drawn. The clock keeps its
+seven-segment face, now with smooth edges.
+
+Chinese stays 1-bit, deliberately. An antialiased version was built and
+withdrawn the same day: it would have made Chinese the only thing on the panel
+rendered through a blit path of our own, for glyphs that are bitmap art either
+way. `docs/decisions.md` has the reasoning, including the byte-order trap that
+made it visibly wrong on the panel.
+
+Flashing `cyd-clock-weather-v2.2.0-4mb.bin` at `0x0` is a **factory reset** —
+it erases stored settings and touch calibration along with everything else. To
+update an existing device and keep them, upload the application only with
+`./tools/flash.sh app`. See `flash.md`.
+
+### Added
+
+- **A language setting: English or 繁體中文.** A radio pair on the settings page,
+  stored in NVS beside Units; the device restarts into it like every other
+  setting. It covers the whole panel — all five scenes, the status strip, the
+  boot messages, the setup portal and the touch calibration wizard — and the
+  settings page itself, including the route picker.
+  - Bus stop names stay Chinese in both, because that is what is written on the
+    stop.
+  - An unprovisioned device shows English: the setup portal runs before there is
+    a stored preference to read, and the person seeing that screen has not
+    chosen one yet.
+  - The Chinese vocabulary grew from 18 baked strings to 93 (~14 KB). Anything
+    with a number in it — the date, the golden-hour countdown, "72% lit" — is
+    laid out part by part, because the two languages order the pieces
+    differently: `in 2h 05m` against `2小時05分後`.
+
+- **Every configured stop is baked on save**, not only the ones re-picked in
+  that page session. A stop added through "Manual entry" previously never got a
+  Chinese bitmap at all, and a slot whose bitmap had been lost could not be
+  recovered without drilling the whole route down again — a plain Save uploaded
+  nothing. It also refreshes a bitmap whose text was edited by hand.
+
+- **Anti-aliased text everywhere.**
+  - **Latin** now uses `.vlw` smooth fonts. `SMOOTH_FONT` had been enabled in
+    the `User_Setup` templates since the beginning and nothing had ever used it.
+    Four subsets are baked by `tools/gen_vlw.py`, which solves for the pixel
+    size that reproduces each built-in font's height rather than guessing, so
+    every existing layout constant still lands where it did.
+  - **The clock keeps its LCD look.** Font 8 was seven-segment, so the big
+    digits are baked from DSEG7 Classic Bold (SIL OFL, vendored in
+    `tools/fonts/`) rather than the proportional face used everywhere else.
+  - **Chinese is deliberately not antialiased.** It stays 1-bit, drawn by
+    `TFT_eSPI::drawBitmap` as it always has been. A 4-bpp alpha version was
+    tried and withdrawn: it would have made Chinese the only thing on the panel
+    rendered through a blit path of our own, for glyphs that are bitmap art
+    either way. See `docs/decisions.md`.
+
+### Changed
+
+- **The clock's digit sprite is allocated once at boot** instead of on every
+  scene entry. It was a 10 KB *contiguous* allocation several hundred times a
+  day, which is the fragmentation `labels.cpp` has always been written to avoid.
+- The degree sign is now a real glyph rather than two hand-drawn circles.
+- `goldenHourStatus()` returns numbers and `moonPhaseName()` returns a phase
+  enum, so `sun_moon.cpp` no longer contains any user-visible text.
+
+### Fixed
+
+- Removed `placeholder()`, dead since the last scene was implemented.
+
+### Upgrading
+
+Nothing to do. Baked stop-name bitmaps are unchanged from v2.1.0, and no setting
+is lost.
+
+If you flashed the short-lived build that stored them as 4-bpp alpha, the first
+boot converts them back byte-for-byte and removes `/l4`. Either way the bus
+scene never falls back to English on account of the upgrade.
+
+## v2.1.0 — 下一班車, and a settings page for everything — 2026-08-10
+
+Adds a fifth scene showing the next Hong Kong bus or minibus, and moves the
+last of the compile-time configuration onto a page the device serves itself.
+Nothing user-specific is baked into the binary any more, so this image can be
+handed to anyone.
+
+Flashing `cyd-clock-weather-v2.1.0-4mb.bin` at `0x0` is a **factory reset** —
+it erases stored settings and touch calibration along with everything else. To
+update an existing device and keep them, upload the application only with
+`./tools/flash.sh app`. See `flash.md`.
+
+### Added
+
+- **A fifth scene: 下一班車 / Next Bus.** The next Hong Kong bus or minibus at up
+  to four stops, in Traditional Chinese, with a coloured route badge that
+  slides toward the stop as the vehicle approaches. Two large rows so it reads
+  from across a room; four stops fill two pages, alternating every 6 s so an
+  unattended rotation shows both within one 12 s dwell.
+  Tapping to it holds the rotation for 60 s instead of 45.
+  - **KMB/LWB, Citybus and green minibus**, which are three genuinely different
+    API models rather than one with a parameter. Direction filtering is done
+    client-side for the first two — a stop served both ways returns rows for
+    both — and the serial log prints the drop count, because a broken filter is
+    invisible at a one-direction stop.
+  - **ETAs are stored as absolute epoch times**, and the countdown is recomputed
+    every second. So a five-minute-old fetch still shows the right number, and
+    unplugging the router leaves the display counting down correctly with only
+    the header's freshness changing colour.
+  - **Chinese without a CJK font.** TFT_eSPI has none, and an embedded one costs
+    1.35 MB at a size too small to read (2.04 MB at a size that isn't, which
+    does not fit). Instead the ~18 fixed words are baked at build time by
+    `tools/gen_zh_labels.py` (2.5 KB), and your stop names are baked by your
+    browser and stored on LittleFS. See `docs/decisions.md`.
+  - **Route lookup happens in the browser**, so only resolved stop ids reach the
+    device. Each slot is a plain text field with the picker layered on top, not
+    the other way round, so the section still works if the lookup is unavailable
+    and "Manual entry" is a permanent escape hatch rather than a debug tool.
+  - The label preview on the settings page shows the **actual 1-bit result** at
+    real size, and the text is editable: operator stop names are written for a
+    route database, not a wall.
+
+- **Screens can be switched off, and each one's time on screen adjusted**, from
+  a new *Screens* section on the settings page. Untick a screen and the rotation
+  skips it and it loses its dot in the status bar; its timing is remembered for
+  when you tick it back on. At least one has to stay on — the form refuses
+  otherwise, because a panel with no screen left to draw would sit frozen
+  showing an address it could no longer print.
+
+### Fixed
+
+- **Saving from the setup AP no longer risks erasing your bus stops.** The bus
+  section is hidden in AP mode, since the device *is* the access point and has
+  no route to the internet, so every route lookup would fail. The values are
+  still carried as hidden fields, and `handleSave` now distinguishes a field
+  that was *absent* from one the user *cleared* — previously an absent field
+  read as an empty string and cleared the slot.
+- **The settings page no longer discards what you typed when a save is
+  rejected.** A validation error repopulated every field from the last *saved*
+  values instead of the submitted ones. (The password field is deliberately
+  excluded — it renders as a placeholder, and echoing it would put the WiFi
+  password in the page source.)
+- **`flash.md` was wrong about what a reflash keeps.** `app.ino.merged.bin` is a
+  full 4 MB image whose padding covers the NVS and filesystem partitions, so
+  flashing it at `0x0` is a factory reset — settings, touch calibration and all.
+  `./tools/flash.sh app` uploads only the application and preserves them. The
+  two are now documented as the different operations they are.
+- **Golden hour collided with the moon phase name on the Sun & Moon screen.**
+  It sat left-aligned at x=170 while "Waning Crescent" runs to x=173 in Font 2,
+  across rows the golden-hour value also occupied — so the longest phase names
+  overlapped it outright and the rest sat flush against it. The whole lower-right
+  quadrant was empty, so the pair now centres there instead, and the value moves
+  up to Font 4 since there is room for it.
+- Scene-position dots in the status strip were pitched 16 px apart, which left
+  the fifth dot 4 px from the pause glyph and would have overlapped at six. Now
+  13 px, with 16 px of clearance.
+
+- **Settings are configured from a web page, not `config.h`.** WiFi, location,
+  timezone and units now live in NVS and are set from a page the device serves
+  itself. Nothing user-specific is compiled in any more, so **the built binary
+  can be shared** — `strings app.bin` used to print the author's WiFi password.
+  - The server runs in both modes: on the LAN IP when connected, and as a
+    `CYD-Setup-XXXX` SoftAP with a DNS captive portal when it can't connect.
+  - **The clock screen prints the settings address** in a dim footer under the
+    date. A settings page nobody can find is not a feature.
+  - A failed connection stays non-fatal, as it always has been. The setup AP
+    comes up *alongside* a working offline clock (`WIFI_AP_STA`) and is dropped
+    automatically once the real network returns.
+  - This covers WiFi lost **at runtime**, not just at boot: after two minutes
+    without a connection the setup AP is raised on its own, so replacing a
+    router or changing its password never requires a power cycle to reach the
+    settings page. The delay stops an ordinary router reboot from flapping it.
+  - **Holding a finger on the panel through boot forces setup** — the recovery
+    path for a device joined to a network that no longer exists.
+  - The first-run portal deliberately has no timeout, unlike the calibration
+    wizard. See `docs/decisions.md` for why that is not a violation of the
+    appliance rule.
+  - The page never sends a stored password back to the browser; leaving the
+    field blank keeps the current one.
+
+### Changed
+
+- **Partition scheme is now `huge_app`**, set as the default `FQBN` in
+  `build_all.sh` and `flash.sh`. The web UI pushes the app to ~1.22 MB against
+  the default scheme's 1.31 MB slot (93% full); `huge_app` gives it 3 MB (38%)
+  by dropping the second OTA slot, which is already a non-goal. `nvs` sits at the
+  same offset in both schemes, so stored settings and touch calibration survive
+  the switch. **An `FQBN` override must now carry `PartitionScheme=huge_app`.**
+- `units.h` reads the units setting at runtime instead of folding a compile-time
+  constant. The branch is irrelevant next to the SPI writes each call feeds.
+- `tools/sync_shared.sh` no longer syncs `config.h` — only `board.h`.
+
+### Removed
+
+- `config.h`, `config/config.example.h` and the generated per-sketch copies.
+
 ### Security
 
 - **`config.h` is no longer tracked by git.** The repo had no `.gitignore` at
